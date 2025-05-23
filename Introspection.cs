@@ -28,19 +28,19 @@ public static class Introspection
             ResoniteMod.Debug("Introspection : Field is " + (field == null ? "null" : "not null"));
             if (field == null)
                 return null;
-            
+
             ResoniteMod.Debug("Introspection : Field is " + field.Name);
             // Get the delegate that acts as a field accessor the target field
             var del = GetDynamicMethod(obj, field, ilOverride);
             ResoniteMod.Debug("Introspection : Delegate is " + (del == null ? "null" : "not null & " + del.GetType().ToString()));
-            
+
             if (del == null)
                 return null;
-            
+
             // Add the delegate to the dictionary
             if (!_cachedSetters.ContainsKey(obj))
                 _cachedSetters.Add(obj, new Dictionary<string, RefAction<object, object>>());
-            
+
             _cachedSetters[obj].Add(fieldName, del);
             ResoniteMod.Debug("Introspection : Added delegate to dictionary at " + obj.ToString() + "." + fieldName);
             return del;
@@ -60,26 +60,26 @@ public static class Introspection
         {
             if (obj == null || propName == null || propName.Length == 0)
                 return null;
-            
+
             ResoniteMod.Debug("Introspection : Getting property");
             // Get the target property
             PropertyInfo prop = obj.GetProperty(propName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             ResoniteMod.Debug("Introspection : Property is " + (prop == null ? "null" : "not null"));
             if (prop == null)
                 return null;
-            
+
             ResoniteMod.Debug("Introspection : Property is " + prop.Name);
             // Get the delegate that acts as a property accessor the target property
             var del = GetDynamicPropMethod(obj, prop);
             ResoniteMod.Debug("Introspection : Delegate is " + (del == null ? "null" : "not null & " + del.GetType().ToString()));
-            
+
             if (del == null)
                 return null;
-            
+
             // Add the delegate to the dictionary
             if (!_cachedPropSetters.ContainsKey(obj))
                 _cachedPropSetters.Add(obj, new Dictionary<string, Action<object, object>>());
-            
+
             _cachedPropSetters[obj].Add(propName, del);
             ResoniteMod.Debug("Introspection : Added delegate to dictionary at " + obj.ToString() + "." + propName);
             return del;
@@ -149,12 +149,12 @@ public static class Introspection
     {
         if (obj == null || prop == null || !prop.CanWrite)
             return null;
-        
+
         // Create a delegate from the set method
         var method = prop.GetSetMethod(true);
         if (method == null)
             return null;
-        
+
         var del = new DynamicMethod("", null, new Type[] { typeof(object), typeof(object) }, true);
         var il = del.GetILGenerator(256);
         il.Emit(OpCodes.Ldarg_0);
@@ -168,7 +168,7 @@ public static class Introspection
 
         var ret = (Action<object, object>)del.CreateDelegate(typeof(Action<object, object>));
         // Add the delegate to the dictionary
-        
+
         return ret;
     }
 }

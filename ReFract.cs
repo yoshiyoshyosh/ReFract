@@ -25,7 +25,7 @@ public class ReFract : ResoniteMod
     // This is an override for Introspection - which generates accessor delegates for fields because reflection is slow and I hate it.
     // Specifically so it can handle Unity's ParameterOverride<T> types.
     public static bool ILOverride(Type obj, FieldInfo field, ILGenerator il)
-    {   
+    {
         Type BaseFieldType = field.FieldType.BaseType;
         Label typeFailed = il.DefineLabel();
         Label acceptIntAsEnum = il.DefineLabel();
@@ -77,7 +77,7 @@ public class ReFract : ResoniteMod
         }
         return false;
     }
-    
+
     public override void OnEngineInit()
     {
         // Register some events so that when we switch from world to world, the cameras will get refreshed since the post processing likes to reset whenever the gameobjects are disabled
@@ -92,7 +92,7 @@ public class ReFract : ResoniteMod
             Engine.Current.WorldManager.WorldFocused += worldAction;
             Engine.Current.WorldManager.WorldAdded += worldAction;
         });
-        
+
         // Msg($"Re:Fract : Unity version: {UnityEngine.Application.version} ({UnityEngine.Application.unityVersion})");
         Harmony harmony = new Harmony("net.Cyro.ReFract");
 
@@ -188,13 +188,13 @@ public class ReFract : ResoniteMod
                 FieldInfo? field = t.GetField("Value", BindingFlags.Instance | BindingFlags.Public);
                 if (field == null)
                     return;
-                
+
                 // Get the IField for it
                 IField Value = (IField)field.GetValue(__instance);
-                
+
                 // Get the handler field for the dynamic variable (the meat of dynvars)
                 var handlerField = t.BaseType.GetField("handler", BindingFlags.Instance | BindingFlags.NonPublic);
-                
+
                 // This is a bit unorthodox, but it creates a delegate that lets me access the handler field from a dynvar without reflection
                 // The reason I make a delegate is because you could be changing many of these variables many times a second, and I don't want reflection slowing it down considerably
                 // Also efficiently calls DynvarCamSetter<T> for whatever type the variable is.
@@ -206,9 +206,9 @@ public class ReFract : ResoniteMod
                 il.Emit(OpCodes.Ldfld, handlerField);
                 il.Emit(OpCodes.Call, typeof(DynamicVariableBase_Patch).GetMethod("DynvarCamSetter").MakeGenericMethod(t.GetGenericArguments()[0]));
                 il.Emit(OpCodes.Ret);
-                
+
                 var methodDelegate = (Action<object>)method.CreateDelegate(typeof(Action<object>));
-                
+
                 // Subscribe to the Changed event on the value field.
                 // I sorely wish I could have just patched the function in the variable space that handles all changes variables send ;_;
                 Value.Changed += (IChangeable c) => {
@@ -258,7 +258,7 @@ public class ReFract : ResoniteMod
                     {
                         CameraHelperFunctions.RefreshCameraState(camVar, refVar.Target as Camera);
                         Debug($"Re:Fract : Camera \"{Name}\" updated!");
-                        
+
                         // Just to be extra safe ;) (Though I am under no illusions that juggling events is uh... not great)
                         Sync<bool> cameraSlotActive = refVar.Target.Slot.ActiveSelf_Field;
                         Sync<bool> cameraPostProcessActive = refVar.Target.Postprocessing;
@@ -273,7 +273,7 @@ public class ReFract : ResoniteMod
                             refVar.Target.Slot.ActiveSelf_Field.Changed += handler;
                             Debug($"Re:Fract : Camera \"{Name}\" subscribed to slot active state!");
                         }
-                        
+
                         del = fi.GetValue(refVar.Target.Postprocessing) as Delegate;
                         if (del == null || !del.HasSubscriber(handler))
                         {
@@ -310,11 +310,11 @@ public class ReFract : ResoniteMod
                 T Value = __instance.DynamicValue;
                 if (Value == null)
                     return;
-                
+
                 DynamicVariableSpace Space = handler.CurrentSpace;
-                
+
                 string[] camParams = Name.Split('_');
-                if (camParams.Length == 4 && Name.StartsWith(DynVarKeyString))
+                if (camParams.Length == 4)
                 {
                     string camName = camParams[1];
                     string componentName = camParams[2];
@@ -347,7 +347,7 @@ public class ReFract : ResoniteMod
         {
             __instance.Slot.AddLocalSlot("Re:Fract Camera Marker", false);
         }
-        
+
         [HarmonyPatch(typeof(InteractiveCamera), "Capture", new Type[] { typeof(InteractiveCamera.Mode), typeof(int2), typeof(bool) })]
         [HarmonyPostfix]
         public static void InteractiveCamera_Capture_Postfix(InteractiveCamera __instance)
@@ -363,13 +363,13 @@ public class ReFract : ResoniteMod
             {
                 return true;
             }
-            
+
             // If it's bigger then we render onto a new texture, otherwise we render onto the existing one and then downscale it
 
             // Find the local slots so we can iterate through it and find our camera
             World curWorld = Engine.Current.WorldManager.FocusedWorld;
             var worldLocalSlotsField = typeof(World).GetField("_localSlots", BindingFlags.Instance | BindingFlags.NonPublic);
-            
+
             List<Slot> localSlots = (List<Slot>)worldLocalSlotsField.GetValue(curWorld);
             Slot? marker = null;
             try
@@ -392,8 +392,11 @@ public class ReFract : ResoniteMod
             Camera? cam = marker.Parent.GetComponent<Camera>();
             UnityEngine.Camera? unityCam = (cam.Connector as CameraConnector)?.UnityCamera;
             UnityEngine.RenderTexture? renderTexture = unityCam?.targetTexture;
-            
+
             if (unityCam == null || renderTexture == null) return true;
+
+            bool removeAlpha = false;
+            cam.Slot?.FindSpace("")?.TryReadValue<bool>(DynVarKeyString + "RemoveAlpha", out removeAlpha);
 
             int2 camRes = new int2(renderTexture.width, renderTexture.height);
 
@@ -405,7 +408,7 @@ public class ReFract : ResoniteMod
                 UnityEngine.Texture2D tex = new UnityEngine.Texture2D(queriedRes.x, queriedRes.y, renderSettings.textureFormat.ToUnity(true), false);
                 UnityEngine.RenderTexture temp = UnityEngine.RenderTexture.GetTemporary(queriedRes.x, queriedRes.y, 24, RenderTextureFormat.ARGB32);
                 UnityEngine.RenderTexture active = UnityEngine.RenderTexture.active;
-                
+
                 UnityEngine.RenderTexture old = unityCam.targetTexture;
                 unityCam.targetTexture = temp;
                 unityCam.Render();
@@ -415,9 +418,13 @@ public class ReFract : ResoniteMod
                 tex.ReadPixels(new UnityEngine.Rect(0, 0, queriedRes.x, queriedRes.y), 0, 0, false);
                 tex.Apply();
                 UnityEngine.RenderTexture.active = active;
-                
+
                 UnityEngine.RenderTexture.ReleaseTemporary(temp);
                 byte[] bytes = tex.GetRawTextureData();
+                if (removeAlpha)
+                {
+                    CameraHelperFunctions.SetOpaque(bytes, tex.format);
+                }
                 UnityEngine.Object.Destroy(tex);
                 __result = bytes;
                 return false;
@@ -435,6 +442,10 @@ public class ReFract : ResoniteMod
 
                 UnityEngine.Texture2D resized = tex.ResizeReal(queriedRes.x, queriedRes.y);
                 byte[] bytes = resized.GetRawTextureData();
+                if (removeAlpha)
+                {
+                    CameraHelperFunctions.SetOpaque(bytes, resized.format);
+                }
                 UnityEngine.Object.Destroy(tex);
                 UnityEngine.Object.Destroy(resized);
                 __result = bytes;

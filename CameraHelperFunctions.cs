@@ -29,24 +29,25 @@ public static class CameraHelperFunctions
                 return value;
         }
     }
+
     // This function will set a post processing variable on a camera that exists in a dynamic variable space
     public static void SetCameraVariable(DynamicVariableSpace? space, string CameraName, string ComponentName, string ParamName, object Value, Camera? altCameraInstance = null)
     {
         if (space == null || Engine.Current.WorldManager.FocusedWorld != space.World)
             return;
-        
+
         bool TypeFound = ReFract.TypeLookups.TryGetValue(ComponentName, out Type CompType);
         if (!TypeFound) return;
 
         Camera? cam = null;
         UnityEngine.Camera? UnityCam = null;
-        
+
         // Check if an alternative camera instance was provided to see if we can skip searching the space for one
         if (altCameraInstance != null)
             cam = altCameraInstance;
         else
             space?.TryReadValue<Camera>(ReFract.DynVarCamKeyString + CameraName, out cam);
-        
+
         if (cam == null || (cam.Slot.Connector is SlotConnector slotConnector && !slotConnector.GeneratedGameObject.activeSelf))
             return;
 
@@ -61,16 +62,16 @@ public static class CameraHelperFunctions
             Engine.Current.WorldManager.FocusedWorld.RunInSeconds(0.25f, () => SetCameraVariable(space, CameraName, ComponentName, ParamName, Value));
             return;
         }
-        
+
         if (UnityCam != null && Value != null)
         {
             var layer = UnityCam.GetComponent<PostProcessLayer>();
             if (layer == null) return;
 
             // Check if the component name is a post processing setting or just a generic post processing component
-            bool IsPostProcessSetting = CompType.InheritsFrom(typeof(PostProcessEffectSettings));   
+            bool IsPostProcessSetting = CompType.InheritsFrom(typeof(PostProcessEffectSettings));
 
-            // Set targe to either be a post process bundle or a component based on the above condition 
+            // Set targe to either be a post process bundle or a component based on the above condition
             //NeosMod.Msg("Re:Fract : " + ComponentName + " Component Found, type: " + ReFract.TypeLookups[ComponentName]);
             object? target = null;
             if (IsPostProcessSetting)
@@ -81,7 +82,7 @@ public static class CameraHelperFunctions
                 target = UnityCam.GetComponent(CompType);
 
             if (target == null) return;
-            
+
             ResoniteMod.Debug($"Re:Fract : Camera is {cam}");
             ResoniteMod.Debug($"Re:Fract : setting the {ParamName} parameter of the {target.GetType()} on camera {cam?.Slot.Name} to {Value} (of type {Value.GetType()}");
             // Call into introspection and give it our override for parameters. Introspection again lets us set values on private fields without reflection
@@ -109,7 +110,7 @@ public static class CameraHelperFunctions
         var handlerField = camVar.GetType().BaseType.GetField("handler", BindingFlags.Instance | BindingFlags.NonPublic);
         if (handlerField == null)
             return;
-        
+
         var handler = handlerField.GetValue(camVar) as DynamicVariableHandler<Camera>;
         if (handler == null || handler.CurrentSpace == null) return;
 
@@ -121,7 +122,7 @@ public static class CameraHelperFunctions
         var spaceDict = spaceDictField.GetValue(handler.CurrentSpace) as System.Collections.IDictionary;
         if (spaceDict == null)
             return;
-        
+
         // Slow :(
         // Iterate over all of the values in the dictionary and re-apply them to the camera
         foreach (var key in spaceDict.Keys)
@@ -173,5 +174,27 @@ public static class CameraHelperFunctions
         UnityEngine.RenderTexture.active = null;
         UnityEngine.RenderTexture.ReleaseTemporary(rt);
         return nTex;
+    }
+
+    // sets all alpha values in a raw texture array to opaque. not using a SetPixel() loop for efficiency
+    public static void SetOpaque(byte[] rawTex, UnityEngine.TextureFormat format)
+    {
+        int start;
+        int inc;
+
+        switch (format)
+        {
+        case UnityEngine.TextureFormat.RGBA32:
+            start = 3; inc = 4; break;
+        case UnityEngine.TextureFormat.ARGB32:
+            start = 0; inc = 4; break;
+        default:
+            return;
+        }
+
+        for (int i = start; i < rawTex.Length; i += inc)
+        {
+            rawTex[i] = 255;
+        }
     }
 }
